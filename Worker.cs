@@ -17,7 +17,10 @@ namespace WatchExample
 
             do
             {
-                var listPods = await _client.ListPodForAllNamespacesWithHttpMessagesAsync(limit: 10, cancellationToken: cancellationToken);
+                var listPods = await _client.ListPodForAllNamespacesWithHttpMessagesAsync(
+                    limit: 10, 
+                    cancellationToken: cancellationToken);
+
                 resourceVersion = listPods.Body.Metadata.ResourceVersion;
                 continueProperty = listPods.Body.Metadata.ContinueProperty;
             }
@@ -39,7 +42,11 @@ namespace WatchExample
                     try
                     {
                         // Get list response
-                        var listTask = _client.ListPodForAllNamespacesWithHttpMessagesAsync(allowWatchBookmarks: true, watch: true, resourceVersion: resourceVersion, cancellationToken: cancellationToken);
+                        var listTask = _client.ListPodForAllNamespacesWithHttpMessagesAsync(
+                            allowWatchBookmarks: true, 
+                            watch: true, 
+                            resourceVersion: resourceVersion, 
+                            cancellationToken: cancellationToken);
 
                         // inner loop: receive items as lines arrive
                         var tcs = new TaskCompletionSource();
@@ -99,7 +106,10 @@ namespace WatchExample
                 {
                     try
                     {
-                        using var watch = await _client.WatchAsync<V1Pod>(resourceVersion: resourceVersion, allowWatchBookmarks: true, cancellationToken: cancellationToken);
+                        using var watch = await _client.WatchAsync<V1Pod>(
+                            resourceVersion: resourceVersion, 
+                            allowWatchBookmarks: true, 
+                            cancellationToken: cancellationToken);
 
                         // inner loop: receive items as lines arrive
                         while (!cancellationToken.IsCancellationRequested)
@@ -146,7 +156,10 @@ namespace WatchExample
                 {
                     try
                     {
-                        using var watch = await _client.WatchAsync<V1Pod>(resourceVersion: resourceVersion, allowWatchBookmarks: true, cancellationToken: cancellationToken);
+                        using var watch = await _client.WatchAsync<V1Pod>(
+                            resourceVersion: resourceVersion, 
+                            allowWatchBookmarks: true, 
+                            cancellationToken: cancellationToken);
 
                         // inner loop: receive items as lines arrive
                         await foreach (var (eventType, item) in watch.WithCancellation(cancellationToken))
