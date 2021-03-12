@@ -18,7 +18,7 @@ namespace WatchExample
             do
             {
                 var listPods = await _client.ListPodForAllNamespacesWithHttpMessagesAsync(
-                    limit: 10, 
+                    limit: 10,
                     cancellationToken: cancellationToken);
 
                 resourceVersion = listPods.Body.Metadata.ResourceVersion;
@@ -43,9 +43,9 @@ namespace WatchExample
                     {
                         // Get list response
                         var listTask = _client.ListPodForAllNamespacesWithHttpMessagesAsync(
-                            allowWatchBookmarks: true, 
-                            watch: true, 
-                            resourceVersion: resourceVersion, 
+                            allowWatchBookmarks: true,
+                            watch: true,
+                            resourceVersion: resourceVersion,
                             cancellationToken: cancellationToken);
 
                         // inner loop: receive items as lines arrive
@@ -54,41 +54,91 @@ namespace WatchExample
                         using var registration = cancellationToken.Register(watcher.Dispose);
                         await tcs.Task;
 
-                        void OnClosed()
-                        {
-                            Console.WriteLine($"OnClosed");
-
-                            tcs.TrySetResult();
-                        }
-
-                        void OnError(Exception error)
-                        {
-                            if (error is KubernetesException kubernetesError)
-                            {
-                                // deal with this non-recoverable condition "too old resource version"
-                                if (string.Equals(kubernetesError.Status.Reason, "Expired", StringComparison.Ordinal))
-                                {
-                                    // force control back to outer loop
-                                    resourceVersion = null;
-                                }
-                            }
-
-                            Console.WriteLine($"OnError");
-
-                            tcs.TrySetException(error);
-                            throw error;
-                        }
-
                         void OnEvent(WatchEventType eventType, V1Pod resource)
                         {
                             resourceVersion = resource.ResourceVersion();
 
                             Console.WriteLine($"OnEvent {eventType} {resource.Kind}/{resource.Name()}.{resource.Namespace()}");
                         }
+
+                        void OnError(Exception error)
+                        {
+                            Console.WriteLine($"OnError");
+
+                            tcs.TrySetException(error);
+                            throw error;
+                        }
+
+                        void OnClosed()
+                        {
+                            Console.WriteLine($"OnClosed");
+
+                            tcs.TrySetResult();
+                        }
                     }
-                    catch (Exception ex)
+                    catch (Exception error)
                     {
-                        Console.WriteLine(ex.Message);
+                        if (error is KubernetesException kubernetesError)
+                        {
+                            // deal with this non-recoverable condition "too old resource version"
+                            if (string.Equals(kubernetesError.Status.Reason, "Expired", StringComparison.Ordinal))
+                            {
+                                // force control back to outer loop
+                                resourceVersion = null;
+                            }
+                        }
+
+                        Console.WriteLine(error.Message);
+                    }
+                }
+            }
+        }
+
+        public async Task StyleOnePointFive(CancellationToken cancellationToken)
+        {
+            // outer loop: initial list, or re-list when resourceVersion reset by specific error
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var resourceVersion = await InitialListAsync(cancellationToken);
+
+                // middle loop: watch after list, or re-connect at last resourceVersion when response terminated
+                while (!cancellationToken.IsCancellationRequested && !string.IsNullOrEmpty(resourceVersion))
+                {
+                    try
+                    {
+                        // Get list response
+                        var listTask = _client.ListPodForAllNamespacesWithHttpMessagesAsync(
+                            allowWatchBookmarks: true,
+                            watch: true,
+                            resourceVersion: resourceVersion,
+                            cancellationToken: cancellationToken);
+
+                        // inner loop: receive items as lines arrive
+                        await listTask.WatchAsync<V1Pod, V1PodList>(
+                            onEvent: OnEvent,
+                            onError: error => throw error,
+                            cancellationToken: cancellationToken);
+
+                        void OnEvent(WatchEventType eventType, V1Pod resource)
+                        {
+                            resourceVersion = resource.ResourceVersion();
+
+                            Console.WriteLine($"Async OnEvent {eventType} {resource.Kind}/{resource.Name()}.{resource.Namespace()}");
+                        }
+                    }
+                    catch (Exception error)
+                    {
+                        if (error is KubernetesException kubernetesError)
+                        {
+                            // deal with this non-recoverable condition "too old resource version"
+                            if (string.Equals(kubernetesError.Status.Reason, "Expired", StringComparison.Ordinal))
+                            {
+                                // force control back to outer loop
+                                resourceVersion = null;
+                            }
+                        }
+
+                        Console.WriteLine(error.Message);
                     }
                 }
             }
@@ -107,8 +157,8 @@ namespace WatchExample
                     try
                     {
                         using var watch = await _client.WatchAsync<V1Pod>(
-                            resourceVersion: resourceVersion, 
-                            allowWatchBookmarks: true, 
+                            resourceVersion: resourceVersion,
+                            allowWatchBookmarks: true,
                             cancellationToken: cancellationToken);
 
                         // inner loop: receive items as lines arrive
@@ -157,8 +207,8 @@ namespace WatchExample
                     try
                     {
                         using var watch = await _client.WatchAsync<V1Pod>(
-                            resourceVersion: resourceVersion, 
-                            allowWatchBookmarks: true, 
+                            resourceVersion: resourceVersion,
+                            allowWatchBookmarks: true,
                             cancellationToken: cancellationToken);
 
                         // inner loop: receive items as lines arrive

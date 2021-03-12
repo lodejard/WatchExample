@@ -2,6 +2,7 @@
 using Microsoft.Rest;
 using System;
 using System.Net.Http;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -39,6 +40,80 @@ namespace WatchExample
                 Response = response,
                 Body = new WatchStream<T>(stream, response),
             };
+        }
+    }
+
+    public static class ExampleKubernetesExtensions
+    {
+        //
+        // Summary:
+        //     create a watch object from a call to api server with watch=true
+        //
+        // Parameters:
+        //   responseTask:
+        //     the api response
+        //
+        //   onEvent:
+        //     a callback when any event raised from api server
+        //
+        //   onError:
+        //     a callbak when any exception was caught during watching
+        //
+        //   onClosed:
+        //     The action to invoke when the server closes the connection.
+        //
+        // Type parameters:
+        //   T:
+        //     type of the event object
+        //
+        //   L:
+        //     type of the HttpOperationResponse object
+        //
+        // Returns:
+        //     a watch object
+        public static async Task WatchAsync<T, L>(this Task<HttpOperationResponse<L>> responseTask, Action<WatchEventType, T> onEvent, Action<Exception> onError = null, Action onClosed = null, CancellationToken cancellationToken = default)
+        {
+            Exception finalError = null;
+            var tcs = new TaskCompletionSource();
+            using var watcher = responseTask.Watch(onEvent, OnError, OnClosed);
+            using var registration = cancellationToken.Register(watcher.Dispose);
+            await tcs.Task;
+
+            void OnError(Exception error)
+            {
+                try
+                {
+                    onError?.Invoke(error);
+                }
+                catch (Exception caughtError)
+                {
+                    finalError = caughtError;
+                    throw;
+                }
+            }
+
+            void OnClosed()
+            {
+                try
+                {
+                    onClosed?.Invoke();
+                }
+                catch (Exception caughtError)
+                {
+                    finalError = caughtError;
+                }
+                finally
+                {
+                    if (finalError != null)
+                    {
+                        tcs.SetException(finalError);
+                    }
+                    else
+                    {
+                        tcs.SetResult();
+                    }
+                }
+            }
         }
     }
 }
